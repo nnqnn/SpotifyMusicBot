@@ -1,5 +1,7 @@
+import datetime
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.utils import executor
@@ -55,7 +57,22 @@ async def send_message_every_minute():
                 chat_id = user['chat_username']
                 message_id = user['message_id']
                 try:
-                    await bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=message, parse_mode='Markdown')
+                    message_text = f"Слушает сейчас: {track_info['artists']} - {track_info['name']}."
+                    current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+                    inline_btn_1 = InlineKeyboardButton(
+                        'Песня в Spotify', url=track_info['track_url'])
+                    inline_keyboard = InlineKeyboardMarkup(row_width=2).add(
+                        inline_btn_1)
+                    
+                    message_text_with_time = f"{message_text}\nВремя (по Москве): {current_time}"
+
+                    await bot.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=message_id,
+                        text=message_text_with_time,
+                        reply_markup=inline_keyboard
+                    )
                 except Exception as e:
                     print(f"Ошибка отправки сообщения: {e}")
         await asyncio.sleep(10)
@@ -63,6 +80,7 @@ async def send_message_every_minute():
 @dp.message_handler(commands=['start'])
 async def process_start_command(message: types.Message):
     """Обработка команды /start."""
+    pass
     track_info = await get_current_track()
     if track_info:
         message_reply = await message.reply("Получение информации...")
@@ -74,15 +92,20 @@ async def process_start_command(message: types.Message):
         )
         await message_reply.delete()
     else:
-        await message.reply("Не удалось получить текущий трек.")
+        await message.reply("Ничего сейчас не играет.")
 
 @dp.message_handler(commands=['subscribe'])
 async def subscribe_user(message: types.Message):
     """Подписка пользователя на обновления."""
     USERS.append({'chat_username': message.chat.id, 'message_id': message.message_id})
-    await message.reply("Вы подписаны на обновления текущего трека!")
+    await message.reply("Вы подписаны на обновления!")
+
+async def on_startup(dp: Dispatcher) -> None:
+    message = await bot.send_message(chat_id=YOUR_CHANNEL, text='Бот запущен')
+    USERS.append({'chat_username': YOUR_CHANNEL,
+                  'message_id': message.message_id})
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
     loop.create_task(send_message_every_minute())
-    executor.start_polling(dp)
+    executor.start_polling(dp, on_startup=on_startup, loop=loop)
